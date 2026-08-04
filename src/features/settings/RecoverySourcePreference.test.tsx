@@ -7,6 +7,7 @@ const mockSetPreference = vi.fn();
 let mockPreference: unknown;
 let mockGarminStatus: unknown;
 let mockFitbitStatus: unknown;
+let mockWhoopStatus: unknown;
 
 function createDeferred<T>() {
   let resolve!: (value: T) => void;
@@ -22,6 +23,7 @@ vi.mock("convex/react", () => ({
     if (ref === "recoveryPreferences:getMine") return mockPreference;
     if (ref === "garmin:connections:getMyGarminStatus") return mockGarminStatus;
     if (ref === "fitbit:connections:getMyFitbitStatus") return mockFitbitStatus;
+    if (ref === "whoop:connections:getMyWhoopStatus") return mockWhoopStatus;
     throw new Error(`Unexpected query ${ref}`);
   },
 }));
@@ -37,6 +39,9 @@ vi.mock("../../../convex/_generated/api", () => ({
     },
     fitbit: {
       connections: { getMyFitbitStatus: "fitbit:connections:getMyFitbitStatus" },
+    },
+    whoop: {
+      connections: { getMyWhoopStatus: "whoop:connections:getMyWhoopStatus" },
     },
   },
 }));
@@ -56,6 +61,7 @@ describe("RecoverySourcePreference", () => {
     mockPreference = { preferredSource: null };
     mockGarminStatus = { state: "active" };
     mockFitbitStatus = { state: "disconnected" };
+    mockWhoopStatus = { state: "none" };
   });
 
   it("renders a non-interactive loading state until every source query resolves", () => {
@@ -79,6 +85,20 @@ describe("RecoverySourcePreference", () => {
     expect(screen.getByRole("button", { name: "Automatic" })).toBeEnabled();
     expect(screen.getByRole("button", { name: "Garmin" })).toBeEnabled();
     expect(screen.getByRole("button", { name: "Fitbit" })).toBeDisabled();
+    expect(screen.getByRole("button", { name: "Whoop" })).toBeDisabled();
+  });
+
+  it("enables Whoop when its connection is active and saves it as the source", async () => {
+    mockWhoopStatus = { state: "active" };
+    mockSetPreference.mockResolvedValueOnce({ preferredSource: "whoop" });
+    render(<RecoverySourcePreference />);
+
+    fireEvent.click(screen.getByRole("button", { name: "Whoop" }));
+
+    await waitFor(() => {
+      expect(mockSetPreference).toHaveBeenCalledWith({ preferredSource: "whoop" });
+    });
+    expect(toast.success).toHaveBeenCalledWith("Recovery source saved");
   });
 
   it("keeps a stale stored provider selected while explaining automatic fallback", () => {

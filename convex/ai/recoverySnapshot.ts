@@ -10,6 +10,7 @@ const REASON_LABELS: Readonly<Record<RecoveryReason, string>> = {
   short_sleep: "short sleep",
   low_hrv_status: "low HRV status",
   low_body_battery: "low body battery",
+  low_recovery_score: "red recovery zone",
   low_energy: "low energy",
   high_soreness: "high soreness",
 };
@@ -20,8 +21,15 @@ function formatNumber(value: number): string {
 
 function formatMetrics(metrics: RecoveryMetrics): string[] {
   const parts: string[] = [];
+  if (metrics.recoveryScorePercent !== undefined) {
+    parts.push(`recovery ${Math.round(metrics.recoveryScorePercent)}%`);
+  }
   if (metrics.sleepHours !== undefined) parts.push(`sleep ${formatNumber(metrics.sleepHours)}h`);
   if (metrics.sleepScore !== undefined) parts.push(`sleep score ${Math.round(metrics.sleepScore)}`);
+  if (metrics.sleepPerformancePercent !== undefined) {
+    parts.push(`sleep performance ${Math.round(metrics.sleepPerformancePercent)}%`);
+  }
+  if (metrics.dayStrain !== undefined) parts.push(`strain ${formatNumber(metrics.dayStrain)}`);
   if (metrics.hrvMilliseconds !== undefined) {
     parts.push(`HRV ${formatNumber(metrics.hrvMilliseconds)}ms`);
   }
@@ -44,9 +52,16 @@ function formatMetrics(metrics: RecoveryMetrics): string[] {
 
 function metricsFromHistory(row: RecoveryObservation): RecoveryMetrics {
   return {
+    ...(row.recoveryScorePercent !== undefined
+      ? { recoveryScorePercent: row.recoveryScorePercent }
+      : {}),
     ...(row.sleepDurationSeconds !== undefined
       ? { sleepHours: row.sleepDurationSeconds / 3600 }
       : {}),
+    ...(row.sleepPerformancePercent !== undefined
+      ? { sleepPerformancePercent: row.sleepPerformancePercent }
+      : {}),
+    ...(row.dayStrain !== undefined ? { dayStrain: row.dayStrain } : {}),
     ...(row.hrvMilliseconds !== undefined ? { hrvMilliseconds: row.hrvMilliseconds } : {}),
     ...(row.restingHeartRate !== undefined ? { restingHeartRate: row.restingHeartRate } : {}),
   };

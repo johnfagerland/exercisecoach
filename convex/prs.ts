@@ -180,8 +180,22 @@ export const getWorkoutPerformanceProjection = internalQuery({
       return { status: "miss" };
     }
 
+    // Keep the fast path consistent with getPerMovementHistory: sessions from
+    // recovery-modulated plans are neutral and excluded from PR/regression math.
+    const modulatedWorkouts = await Promise.all(
+      workouts.map(async (workout) => {
+        if (workout.tonalWorkoutId === undefined) return false;
+        const plan = await ctx.db
+          .query("workoutPlans")
+          .withIndex("by_tonalWorkoutId", (q) => q.eq("tonalWorkoutId", workout.tonalWorkoutId))
+          .unique();
+        return plan !== null && plan.userId === userId && plan.recoveryModulated !== undefined;
+      }),
+    );
+    const unmodulatedWorkouts = workouts.filter((_, index) => !modulatedWorkouts[index]);
+
     const rowsByActivity = await Promise.all(
-      workouts.map((workout) =>
+      unmodulatedWorkouts.map((workout) =>
         ctx.db
           .query("exercisePerformance")
           .withIndex("by_userId_activityId_movementId", (q) =>

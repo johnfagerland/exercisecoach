@@ -5,7 +5,7 @@ import { Button } from "@/components/ui/button";
 export const metadata: Metadata = {
   title: "Privacy Policy",
   description:
-    "Privacy policy for Roni. How we handle Tonal credentials, Garmin Connect data, Fitbit data, and account information.",
+    "Privacy policy for Roni. How we handle Tonal credentials, Garmin Connect data, Fitbit data, Whoop data, and account information.",
   alternates: { canonical: "/privacy" },
   robots: { index: true, follow: true },
 };
@@ -80,8 +80,9 @@ export default function PrivacyPage() {
             Chat conversations are processed by Google&apos;s Gemini AI model to generate coaching
             responses. Your training data is included in the AI context so the coach can give
             personalized advice. When you connect Fitbit, this context may include Fitbit activity,
-            sleep, resting heart rate, and HRV summaries. Google&apos;s AI usage policies apply to
-            this processing. Roni does not train its own AI model on your data.
+            sleep, resting heart rate, and HRV summaries. When you connect Whoop, this context may
+            include Whoop recovery, sleep, and strain summaries. Google&apos;s AI usage policies
+            apply to this processing. Roni does not train its own AI model on your data.
           </p>
           <p className="mt-2">
             The service is hosted on Convex (database and backend) and Vercel (frontend). PostHog
@@ -195,6 +196,39 @@ export default function PrivacyPage() {
             can revoke access directly in your Google account. Deleting your Roni account removes
             stored Fitbit connection records, OAuth artifacts, activity summaries, and wellness
             summaries; Roni also attempts to revoke an active Google grant during account deletion.
+          </p>
+        </section>
+
+        <section>
+          <h2 className="mb-2 text-base font-semibold text-foreground">Whoop integration</h2>
+          <p>
+            Connecting Whoop is optional. Roni uses the official Whoop developer API in read-only
+            mode so the AI coach can factor recovery, sleep, and strain from your Whoop membership
+            into your training plan. Roni is not affiliated with or endorsed by Whoop.
+          </p>
+          <p className="mt-2">
+            Authorization happens on Whoop&apos;s site. Your Whoop password is never sent to or seen
+            by Roni. Whoop returns access and refresh tokens, which Roni encrypts with AES-256-GCM
+            before storing. Roni requests read-only access to recovery, sleep, cycle (strain), and
+            basic profile data; it does not request permission to write data to Whoop.
+          </p>
+          <p className="mt-2">
+            The initial and recurring sync window is currently up to 30 days. Stored summaries can
+            include recovery score, resting heart rate, HRV, sleep duration and stages, day strain,
+            and cycle timing. Roni does not store raw sensor samples from Whoop.
+          </p>
+          <p className="mt-2">
+            Whoop data flows one way into Roni and is used only to personalize coaching under the
+            same infrastructure and AI terms described above. Roni polls Whoop periodically for
+            updates and does not write workouts or other data back to Whoop.
+          </p>
+          <p className="mt-2">
+            Disconnecting Whoop marks the connection inactive, removes the encrypted credentials
+            from active use, asks Whoop to revoke Roni&apos;s grant, and starts removing data
+            imported under that connection. If Whoop revocation fails, Roni shows a warning and you
+            can revoke access directly in your Whoop account. Deleting your Roni account removes
+            stored Whoop connection records, OAuth artifacts, and recovery, sleep, and cycle
+            summaries; Roni also attempts to revoke an active Whoop grant during account deletion.
           </p>
         </section>
 

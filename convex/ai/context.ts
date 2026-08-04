@@ -1,8 +1,7 @@
 import type { ActionCtx } from "../_generated/server";
 import { internal } from "../_generated/api";
 import type { Doc, Id } from "../_generated/dataModel";
-import { detectMissedSessions, formatMissedSessionContext } from "../coach/missedSessionDetection";
-import { getDateStringInTimezone, getWeekStartDateStringInTimezone } from "../weekPlanHelpers";
+import { getDateStringInTimezone } from "../weekPlanHelpers";
 import type { OwnedAccessories } from "../tonal/accessories";
 import type { SnapshotInputs } from "../coachState";
 import { deriveRecoveryState } from "../trainingState/recovery";
@@ -20,6 +19,7 @@ import {
 import { formatRecoveryLines } from "./recoverySnapshot";
 import { formatLiftingSnapshot } from "./liftingSnapshot";
 import { formatNutritionSnapshot } from "./nutritionSnapshot";
+import { appendWeekPlanSections } from "./weekPlanSnapshot";
 // Re-export for backward compatibility (tests, other consumers)
 export { type SnapshotSection, trimSnapshot, getHrIntensityLabel, formatExternalActivityLine };
 
@@ -329,57 +329,7 @@ export async function buildTrainingSnapshotWithMetadata(
     sections.push({ priority: 11, lines: perfLines });
   }
 
-  try {
-    const todayDate = getDateStringInTimezone(snapshotNow, userTimezone);
-    const weekStartDate = getWeekStartDateStringInTimezone(snapshotNow, userTimezone);
-    const weekPlan = (await ctx.runQuery(internal.weekPlans.getByUserIdAndWeekStartInternal, {
-      userId: convexUserId,
-      weekStartDate,
-    })) as Doc<"weekPlans"> | null;
-
-    if (weekPlan) {
-      const workoutPlanIds = weekPlan.days
-        .map((d) => d.workoutPlanId)
-        .filter((id): id is Id<"workoutPlans"> => id !== undefined);
-
-      const uniquePlanIds = [...new Set(workoutPlanIds)];
-      const workoutPlanResults = await Promise.all(
-        uniquePlanIds.map((planId) =>
-          ctx.runQuery(internal.workoutPlans.getById, { planId, userId: convexUserId }),
-        ),
-      );
-
-      const tonalWorkoutIdByPlanId = new Map<string, string>();
-      for (let i = 0; i < uniquePlanIds.length; i++) {
-        const wp = workoutPlanResults[i] as Doc<"workoutPlans"> | null;
-        if (wp?.tonalWorkoutId) {
-          tonalWorkoutIdByPlanId.set(uniquePlanIds[i], wp.tonalWorkoutId);
-        }
-      }
-
-      const completedTonalIds = new Set(
-        activities.map((a) => a.tonalWorkoutId).filter((id): id is string => id !== undefined),
-      );
-
-      const localDay = new Date(`${todayDate}T00:00:00.000Z`).getUTCDay();
-      const todayDayIndex = (localDay + 6) % 7; // Mon=0..Sun=6
-      const missedSummary = detectMissedSessions({
-        days: weekPlan.days,
-        todayDayIndex,
-        completedTonalIds,
-        tonalWorkoutIdByPlanId,
-        activityDates: activities.map((a) => a.date),
-        todayDate,
-      });
-
-      const missedContext = formatMissedSessionContext(missedSummary);
-      if (missedContext) {
-        sections.push({ priority: 12, lines: [missedContext] });
-      }
-    }
-  } catch {
-    // Missed session detection is non-critical; continue without it
-  }
+  await appendWeekPlanSections(ctx, convexUserId, activities, snapshotNow, userTimezone, sections);
 
   const snapshot = trimSnapshot(sections, SNAPSHOT_MAX_CHARS);
   return {

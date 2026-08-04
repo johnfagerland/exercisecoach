@@ -39,6 +39,7 @@ import {
   setWarmupBlockTool,
   swapExerciseTool,
 } from "./weekModificationTools";
+import { getWhoopDataTool } from "./whoopDataTool";
 import {
   createApproveWeekPlanTool,
   createDeleteWeekPlanTool,
@@ -85,6 +86,7 @@ const RAW_COACH_TOOLS = {
   get_injuries: getInjuriesTool,
   get_weekly_volume: getWeeklyVolumeTool,
   analyze_volume_strength: analyzeVolumeStrengthTool,
+  get_whoop_data: getWhoopDataTool,
 } satisfies ToolSet;
 
 export type CoachToolName = keyof typeof RAW_COACH_TOOLS;

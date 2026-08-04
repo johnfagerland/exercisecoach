@@ -7,29 +7,36 @@ import { api } from "../../../convex/_generated/api";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 
-type RecoverySource = "garmin" | "fitbit";
+type RecoverySource = "garmin" | "fitbit" | "whoop";
 type PreferenceValue = RecoverySource | null;
 
 const OPTIONS: readonly { readonly value: PreferenceValue; readonly label: string }[] = [
   { value: null, label: "Automatic" },
   { value: "garmin", label: "Garmin" },
   { value: "fitbit", label: "Fitbit" },
+  { value: "whoop", label: "Whoop" },
 ];
 
 export function RecoverySourcePreference() {
   const preference = useQuery(api.recoveryPreferences.getMine, {});
   const garminStatus = useQuery(api.garmin.connections.getMyGarminStatus, {});
   const fitbitStatus = useQuery(api.fitbit.connections.getMyFitbitStatus, {});
+  const whoopStatus = useQuery(api.whoop.connections.getMyWhoopStatus, {});
   const setPreference = useMutation(api.recoveryPreferences.setMine);
   const [isSaving, setIsSaving] = useState(false);
 
-  if (preference === undefined || garminStatus === undefined || fitbitStatus === undefined) {
+  if (
+    preference === undefined ||
+    garminStatus === undefined ||
+    fitbitStatus === undefined ||
+    whoopStatus === undefined
+  ) {
     return (
       <Card role="status" aria-label="Loading recovery source preference">
         <CardContent className="space-y-3 p-4">
           <div className="h-4 w-3/4 animate-pulse rounded bg-muted motion-reduce:animate-none" />
-          <div className="grid grid-cols-3 gap-2">
-            {[1, 2, 3].map((item) => (
+          <div className="grid grid-cols-4 gap-2">
+            {[1, 2, 3, 4].map((item) => (
               <div
                 key={item}
                 className="h-11 animate-pulse rounded-lg bg-muted motion-reduce:animate-none"
@@ -44,6 +51,7 @@ export function RecoverySourcePreference() {
   const availability: Record<RecoverySource, boolean> = {
     garmin: garminStatus.state === "active",
     fitbit: fitbitStatus.state === "active",
+    whoop: whoopStatus.state === "active",
   };
   const staleSource =
     preference.preferredSource && !availability[preference.preferredSource]
@@ -77,7 +85,7 @@ export function RecoverySourcePreference() {
 
         <fieldset disabled={isSaving} aria-busy={isSaving}>
           <legend className="sr-only">Primary recovery source</legend>
-          <div className="grid grid-cols-3 gap-2">
+          <div className="grid grid-cols-4 gap-2">
             {OPTIONS.map((option) => {
               const isAvailable = option.value === null || availability[option.value];
               const selected = preference.preferredSource === option.value;
@@ -116,9 +124,9 @@ export function RecoverySourcePreference() {
             role="status"
             className="rounded-lg bg-muted/50 px-3 py-2 text-xs text-muted-foreground"
           >
-            {staleSource === "garmin" ? "Garmin" : "Fitbit"} is not currently connected. Roni will
-            automatically use another fresh source until it reconnects, while keeping your
-            preference.
+            {staleSource === "garmin" ? "Garmin" : staleSource === "whoop" ? "Whoop" : "Fitbit"} is
+            not currently connected. Roni will automatically use another fresh source until it
+            reconnects, while keeping your preference.
           </p>
         ) : null}
       </CardContent>

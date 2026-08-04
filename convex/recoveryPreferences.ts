@@ -3,12 +3,16 @@ import { mutation, query } from "./_generated/server";
 import { getEffectiveUserId } from "./lib/auth";
 import { rateLimiter } from "./rateLimits";
 
-const recoverySourceValidator = v.union(v.literal("garmin"), v.literal("fitbit"));
+const recoverySourceValidator = v.union(
+  v.literal("garmin"),
+  v.literal("fitbit"),
+  v.literal("whoop"),
+);
 const recoveryPreferenceValidator = v.object({
   preferredSource: v.union(recoverySourceValidator, v.null()),
 });
 
-type RecoveryPreference = { preferredSource: "garmin" | "fitbit" | null };
+type RecoveryPreference = { preferredSource: "garmin" | "fitbit" | "whoop" | null };
 
 export const getMine = query({
   args: {},

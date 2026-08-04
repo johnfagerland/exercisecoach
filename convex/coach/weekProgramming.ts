@@ -171,6 +171,13 @@ export const generateDraftWeekPlan = internalAction({
 
     const data = await fetchAndComputePlanData(ctx, args.userId, preferredSplit, targetDays);
 
+    // An active deload block reduces sets/reps in every generated day.
+    const activeBlock: Doc<"trainingBlocks"> | null = await ctx.runQuery(
+      internal.coach.periodization.getActiveBlock,
+      { userId: args.userId },
+    );
+    const isDeload = activeBlock?.blockType === "deload";
+
     // If user specified exact day indices, override the computed ones
     const daySessions = args.trainingDayIndicesOverride
       ? getSessionTypesForSplit(preferredSplit, args.trainingDayIndicesOverride)
@@ -278,6 +285,7 @@ export const generateDraftWeekPlan = internalAction({
       const mainBlocks = blocksFromMovementIds(movementIds, suggestions, {
         catalog,
         goalScheme: data.goalScheme,
+        isDeload,
       });
       const cooldownBlocks = cooldownBlockFromMovementIds(cooldownIds, { catalog });
       const blocks = [...warmupBlocks, ...mainBlocks, ...cooldownBlocks];

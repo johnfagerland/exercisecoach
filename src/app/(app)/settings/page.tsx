@@ -6,6 +6,7 @@ import { useAction, useQuery } from "convex/react";
 import { useAuthActions } from "@convex-dev/auth/react";
 import { usePageView } from "@/lib/analytics";
 import { useFitbitFeatureStatus } from "@/hooks/useFitbitFeatureStatus";
+import { useWhoopFeatureStatus } from "@/hooks/useWhoopFeatureStatus";
 import { useActionData } from "@/hooks/useActionData";
 import { api } from "../../../../convex/_generated/api";
 import { Button } from "@/components/ui/button";
@@ -35,18 +36,16 @@ import {
   TonalConnectionCard,
   type TonalConnectionState,
 } from "@/features/settings/TonalConnectionCard";
+import { GarminConnectionCard } from "@/features/settings/GarminConnectionCard";
+import { FitbitConnectionCard } from "@/features/settings/FitbitConnectionCard";
+import { StravaConnectionCard } from "@/features/settings/StravaConnectionCard";
+import { WhoopConnectionCard } from "@/features/settings/WhoopConnectionCard";
 import {
-  GarminConnectionCard,
-  type GarminConnectionNotice,
-} from "@/features/settings/GarminConnectionCard";
-import {
-  FitbitConnectionCard,
-  type FitbitConnectionNotice,
-} from "@/features/settings/FitbitConnectionCard";
-import {
-  StravaConnectionCard,
-  type StravaConnectionNotice,
-} from "@/features/settings/StravaConnectionCard";
+  fitbitNoticeFromParams,
+  garminNoticeFromParams,
+  stravaNoticeFromParams,
+  whoopNoticeFromParams,
+} from "@/features/settings/connectionNotices";
 import { ProviderSection } from "@/features/byok/ProviderSection";
 import { DISCORD_URL, REPO_URL } from "@/lib/urls";
 import { LogOut, MessageSquare } from "lucide-react";
@@ -72,6 +71,7 @@ function SettingsPageInner() {
   const garminFeature = useQuery(api.garmin.connections.getGarminFeatureStatus, {});
   const fitbitFeatureStatus = useFitbitFeatureStatus();
   const stravaFeatureStatus = useActionData(useAction(api.strava.status.getStravaFeatureStatus));
+  const whoopFeatureStatus = useWhoopFeatureStatus();
   const fitbitFeature =
     fitbitFeatureStatus.state.status === "success" ||
     fitbitFeatureStatus.state.status === "refreshing"
@@ -81,6 +81,11 @@ function SettingsPageInner() {
     stravaFeatureStatus.state.status === "success" ||
     stravaFeatureStatus.state.status === "refreshing"
       ? stravaFeatureStatus.state.data
+      : undefined;
+  const whoopFeature =
+    whoopFeatureStatus.state.status === "success" ||
+    whoopFeatureStatus.state.status === "refreshing"
+      ? whoopFeatureStatus.state.data
       : undefined;
   const [signOutOpen, setSignOutOpen] = useState(false);
 
@@ -104,51 +109,11 @@ function SettingsPageInner() {
           tonalTokenExpired: me.tonalTokenExpired ?? false,
         };
 
-  const garminParam = searchParams.get("garmin");
-  const garminReason = searchParams.get("reason");
-  const garminNotice: GarminConnectionNotice | undefined =
-    garminParam === "connected"
-      ? { kind: "success", message: "Garmin connected." }
-      : garminParam === "error"
-        ? {
-            kind: "error",
-            message: `Garmin connection failed${
-              garminReason ? `: ${garminReason.replaceAll("_", " ")}` : "."
-            }`,
-          }
-        : undefined;
-
-  const fitbitParam = searchParams.get("fitbit");
-  const fitbitReason = searchParams.get("reason");
-  const fitbitErrorMessage =
-    fitbitReason === "access_denied"
-      ? "Fitbit connection was canceled."
-      : fitbitReason === "missing_params"
-        ? "Fitbit connection failed because the authorization response was incomplete. Please try again."
-        : fitbitReason === "oauth_error"
-          ? "Fitbit connection failed while completing authorization. Please try again."
-          : "Fitbit connection failed. Please try again.";
-  const fitbitNotice: FitbitConnectionNotice | undefined =
-    fitbitParam === "connected"
-      ? { kind: "success", message: "Fitbit connected. Your first sync is starting." }
-      : fitbitParam === "error"
-        ? { kind: "error", message: fitbitErrorMessage }
-        : undefined;
-
-  const stravaParam = searchParams.get("strava");
-  const stravaReason = searchParams.get("reason");
-  const stravaErrorMessage =
-    stravaReason === "access_denied"
-      ? "Strava connection was canceled."
-      : stravaReason === "missing_params"
-        ? "Strava connection failed because the authorization response was incomplete. Please try again."
-        : "Strava connection failed. Please try again.";
-  const stravaNotice: StravaConnectionNotice | undefined =
-    stravaParam === "connected"
-      ? { kind: "success", message: "Strava connected. Your first sync is starting." }
-      : stravaParam === "error"
-        ? { kind: "error", message: stravaErrorMessage }
-        : undefined;
+  const noticeReason = searchParams.get("reason");
+  const garminNotice = garminNoticeFromParams(searchParams.get("garmin"), noticeReason);
+  const fitbitNotice = fitbitNoticeFromParams(searchParams.get("fitbit"), noticeReason);
+  const stravaNotice = stravaNoticeFromParams(searchParams.get("strava"), noticeReason);
+  const whoopNotice = whoopNoticeFromParams(searchParams.get("whoop"), noticeReason);
 
   return (
     <div className="mx-auto max-w-2xl px-4 py-8">
@@ -263,6 +228,27 @@ function SettingsPageInner() {
           <StravaConnectionCard
             configured={stravaFeature?.configured ?? false}
             callbackNotice={stravaNotice}
+          />
+        </section>
+      ) : null}
+
+      {/* Keep existing Whoop connections manageable if deployment configuration changes. */}
+      {whoopFeatureStatus.state.status === "error" ||
+      whoopFeature?.enabled ||
+      whoopFeature?.hasConnection ? (
+        <section className="mb-10" id="whoop-connection">
+          <h2 className={SECTION_HEADING}>Whoop Connection</h2>
+          {whoopFeatureStatus.state.status === "error" ? (
+            <div className="mb-3">
+              <ErrorAlert
+                message="Could not check Whoop availability. Existing connections are not affected."
+                onRetry={whoopFeatureStatus.refetch}
+              />
+            </div>
+          ) : null}
+          <WhoopConnectionCard
+            configured={whoopFeature?.enabled ?? false}
+            callbackNotice={whoopNotice}
           />
         </section>
       ) : null}

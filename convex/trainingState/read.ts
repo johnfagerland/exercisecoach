@@ -64,6 +64,48 @@ function fitbitObservation(row: Doc<"fitbitWellnessDaily">): RecoveryObservation
   };
 }
 
+/** Asleep time: in-bed minus awake, when the stage summary carries both. */
+function whoopSleepDurationSeconds(sleep: Doc<"whoopSleep"> | undefined): number | undefined {
+  if (
+    !sleep ||
+    sleep.totalInBedTimeMilli === undefined ||
+    sleep.totalAwakeTimeMilli === undefined
+  ) {
+    return undefined;
+  }
+  return Math.max(0, Math.round((sleep.totalInBedTimeMilli - sleep.totalAwakeTimeMilli) / 1000));
+}
+
+function whoopObservation(
+  row: Doc<"whoopRecovery">,
+  sleepsById: ReadonlyMap<string, Doc<"whoopSleep">>,
+  cyclesByDate: ReadonlyMap<string, Doc<"whoopCycles">>,
+): RecoveryObservation {
+  const sleep = sleepsById.get(row.sleepId);
+  const cycle = cyclesByDate.get(row.calendarDate);
+  const scored = row.scoreState === "SCORED" && row.userCalibrating !== true;
+  const sleepDurationSeconds = whoopSleepDurationSeconds(sleep);
+  return {
+    source: "whoop",
+    calendarDate: row.calendarDate,
+    ingestedAt: row.lastIngestedAt,
+    ...(scored && row.recoveryScore !== undefined
+      ? { recoveryScorePercent: row.recoveryScore }
+      : {}),
+    ...(scored && row.hrvRmssdMilli !== undefined ? { hrvMilliseconds: row.hrvRmssdMilli } : {}),
+    ...(scored && row.restingHeartRate !== undefined
+      ? { restingHeartRate: row.restingHeartRate }
+      : {}),
+    ...(scored && row.spo2Percentage !== undefined ? { avgSpo2: row.spo2Percentage } : {}),
+    ...(sleepDurationSeconds !== undefined ? { sleepDurationSeconds } : {}),
+    ...(sleep?.sleepPerformancePercentage !== undefined
+      ? { sleepPerformancePercent: sleep.sleepPerformancePercentage }
+      : {}),
+    ...(sleep?.respiratoryRate !== undefined ? { avgRespirationRate: sleep.respiratoryRate } : {}),
+    ...(cycle?.strain !== undefined ? { dayStrain: cycle.strain } : {}),
+  };
+}
+
 function checkInSignal(row: Doc<"recoveryCheckIns">): RecoveryCheckInSignal {
   return {
     calendarDate: row.calendarDate,
@@ -79,82 +121,146 @@ export async function readRecoveryInputs(
   ctx: Pick<QueryCtx, "db">,
   userId: Id<"users">,
 ): Promise<RecoveryReadResult> {
-  const [profile, garminConnection, fitbitConnection, checkIns] = await Promise.all([
-    readOrFallback<Doc<"userProfiles"> | null>(
-      () =>
-        ctx.db
-          .query("userProfiles")
-          .withIndex("by_userId", (q) => q.eq("userId", userId))
-          .unique(),
-      null,
-      "profile",
-    ),
-    readOrFallback<Doc<"garminConnections"> | null>(
-      () =>
-        ctx.db
-          .query("garminConnections")
-          .withIndex("by_userId", (q) => q.eq("userId", userId))
-          .unique(),
-      null,
-      "garminConnection",
-    ),
-    readOrFallback<Doc<"fitbitConnections"> | null>(
-      () =>
-        ctx.db
-          .query("fitbitConnections")
-          .withIndex("by_userId", (q) => q.eq("userId", userId))
-          .unique(),
-      null,
-      "fitbitConnection",
-    ),
-    readOrFallback<Doc<"recoveryCheckIns">[]>(
-      () =>
-        ctx.db
-          .query("recoveryCheckIns")
-          .withIndex("by_userId_and_updatedAt", (q) => q.eq("userId", userId))
-          .order("desc")
-          .take(RECOVERY_HISTORY_LIMIT),
-      [],
-      "checkIns",
-    ),
-  ]);
+  const [profile, garminConnection, fitbitConnection, whoopConnection, checkIns] =
+    await Promise.all([
+      readOrFallback<Doc<"userProfiles"> | null>(
+        () =>
+          ctx.db
+            .query("userProfiles")
+            .withIndex("by_userId", (q) => q.eq("userId", userId))
+            .unique(),
+        null,
+        "profile",
+      ),
+      readOrFallback<Doc<"garminConnections"> | null>(
+        () =>
+          ctx.db
+            .query("garminConnections")
+            .withIndex("by_userId", (q) => q.eq("userId", userId))
+            .unique(),
+        null,
+        "garminConnection",
+      ),
+      readOrFallback<Doc<"fitbitConnections"> | null>(
+        () =>
+          ctx.db
+            .query("fitbitConnections")
+            .withIndex("by_userId", (q) => q.eq("userId", userId))
+            .unique(),
+        null,
+        "fitbitConnection",
+      ),
+      readOrFallback<Doc<"whoopConnections"> | null>(
+        () =>
+          ctx.db
+            .query("whoopConnections")
+            .withIndex("by_userId", (q) => q.eq("userId", userId))
+            .unique(),
+        null,
+        "whoopConnection",
+      ),
+      readOrFallback<Doc<"recoveryCheckIns">[]>(
+        () =>
+          ctx.db
+            .query("recoveryCheckIns")
+            .withIndex("by_userId_and_updatedAt", (q) => q.eq("userId", userId))
+            .order("desc")
+            .take(RECOVERY_HISTORY_LIMIT),
+        [],
+        "checkIns",
+      ),
+    ]);
 
   const activeFitbitGeneration =
     fitbitConnection?.status === "active" ? fitbitConnection.generation : null;
-  const [garminRows, fitbitRows] = await Promise.all([
-    garminConnection?.status === "active"
-      ? readOrFallback<Doc<"garminWellnessDaily">[]>(
-          () =>
-            ctx.db
-              .query("garminWellnessDaily")
-              .withIndex("by_userId_calendarDate", (q) => q.eq("userId", userId))
-              .order("desc")
-              .take(RECOVERY_HISTORY_LIMIT),
-          [],
-          "garminWellness",
-        )
-      : Promise.resolve([]),
-    activeFitbitGeneration
-      ? readOrFallback<Doc<"fitbitWellnessDaily">[]>(
-          () =>
-            ctx.db
-              .query("fitbitWellnessDaily")
-              .withIndex("by_userId_and_generation_and_calendarDate", (q) =>
-                q.eq("userId", userId).eq("generation", activeFitbitGeneration),
-              )
-              .order("desc")
-              .take(RECOVERY_HISTORY_LIMIT),
-          [],
-          "fitbitWellness",
-        )
-      : Promise.resolve([]),
-  ]);
+  const activeWhoopGeneration =
+    whoopConnection?.status === "active" ? whoopConnection.generation : null;
+  const [garminRows, fitbitRows, whoopRecoveryRows, whoopSleepRows, whoopCycleRows] =
+    await Promise.all([
+      garminConnection?.status === "active"
+        ? readOrFallback<Doc<"garminWellnessDaily">[]>(
+            () =>
+              ctx.db
+                .query("garminWellnessDaily")
+                .withIndex("by_userId_calendarDate", (q) => q.eq("userId", userId))
+                .order("desc")
+                .take(RECOVERY_HISTORY_LIMIT),
+            [],
+            "garminWellness",
+          )
+        : Promise.resolve([]),
+      activeFitbitGeneration
+        ? readOrFallback<Doc<"fitbitWellnessDaily">[]>(
+            () =>
+              ctx.db
+                .query("fitbitWellnessDaily")
+                .withIndex("by_userId_and_generation_and_calendarDate", (q) =>
+                  q.eq("userId", userId).eq("generation", activeFitbitGeneration),
+                )
+                .order("desc")
+                .take(RECOVERY_HISTORY_LIMIT),
+            [],
+            "fitbitWellness",
+          )
+        : Promise.resolve([]),
+      activeWhoopGeneration
+        ? readOrFallback<Doc<"whoopRecovery">[]>(
+            () =>
+              ctx.db
+                .query("whoopRecovery")
+                .withIndex("by_userId_and_generation_and_calendarDate", (q) =>
+                  q.eq("userId", userId).eq("generation", activeWhoopGeneration),
+                )
+                .order("desc")
+                .take(RECOVERY_HISTORY_LIMIT),
+            [],
+            "whoopRecovery",
+          )
+        : Promise.resolve([]),
+      activeWhoopGeneration
+        ? readOrFallback<Doc<"whoopSleep">[]>(
+            () =>
+              ctx.db
+                .query("whoopSleep")
+                .withIndex("by_userId_and_generation_and_calendarDate", (q) =>
+                  q.eq("userId", userId).eq("generation", activeWhoopGeneration),
+                )
+                .order("desc")
+                .take(RECOVERY_HISTORY_LIMIT * 2),
+            [],
+            "whoopSleep",
+          )
+        : Promise.resolve([]),
+      activeWhoopGeneration
+        ? readOrFallback<Doc<"whoopCycles">[]>(
+            () =>
+              ctx.db
+                .query("whoopCycles")
+                .withIndex("by_userId_and_generation_and_calendarDate", (q) =>
+                  q.eq("userId", userId).eq("generation", activeWhoopGeneration),
+                )
+                .order("desc")
+                .take(RECOVERY_HISTORY_LIMIT),
+            [],
+            "whoopCycles",
+          )
+        : Promise.resolve([]),
+    ]);
+
+  const whoopSleepsById = new Map(whoopSleepRows.map((row) => [row.sleepId, row]));
+  const whoopCyclesByDate = new Map(whoopCycleRows.map((row) => [row.calendarDate, row]));
 
   return {
     activeFitbitGeneration,
     inputs: {
       preferredSource: profile?.preferredRecoverySource ?? null,
-      observations: [...garminRows.map(garminObservation), ...fitbitRows.map(fitbitObservation)],
+      observations: [
+        ...garminRows.map(garminObservation),
+        ...fitbitRows.map(fitbitObservation),
+        ...whoopRecoveryRows.map((row) =>
+          whoopObservation(row, whoopSleepsById, whoopCyclesByDate),
+        ),
+      ],
       checkIns: checkIns.map(checkInSignal),
     },
   };
