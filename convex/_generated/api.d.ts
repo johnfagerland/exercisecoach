@@ -56,6 +56,7 @@ import type * as ai_trainingSnapshotCache from "../ai/trainingSnapshotCache.js";
 import type * as ai_transientErrors from "../ai/transientErrors.js";
 import type * as ai_volumeStrengthTool from "../ai/volumeStrengthTool.js";
 import type * as ai_weekModificationTools from "../ai/weekModificationTools.js";
+import type * as ai_weekPlanSnapshot from "../ai/weekPlanSnapshot.js";
 import type * as ai_weekReasoning from "../ai/weekReasoning.js";
 import type * as ai_weekTools from "../ai/weekTools.js";
 import type * as ai_whoopDataTool from "../ai/whoopDataTool.js";
@@ -323,6 +324,7 @@ declare const fullApi: ApiFromModules<{
   "ai/transientErrors": typeof ai_transientErrors;
   "ai/volumeStrengthTool": typeof ai_volumeStrengthTool;
   "ai/weekModificationTools": typeof ai_weekModificationTools;
+  "ai/weekPlanSnapshot": typeof ai_weekPlanSnapshot;
   "ai/weekReasoning": typeof ai_weekReasoning;
   "ai/weekTools": typeof ai_weekTools;
   "ai/whoopDataTool": typeof ai_whoopDataTool;

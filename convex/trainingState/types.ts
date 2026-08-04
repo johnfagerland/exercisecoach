@@ -1,4 +1,4 @@
-export type RecoveryProviderSource = "garmin" | "fitbit";
+export type RecoveryProviderSource = "garmin" | "fitbit" | "whoop";
 export type RecoverySource = RecoveryProviderSource | "manual";
 export type RecoveryStatus = "unknown" | "normal" | "caution";
 export type RecoveryConfidence = "low" | "medium" | "high";
@@ -8,6 +8,7 @@ export type RecoveryReason =
   | "short_sleep"
   | "low_hrv_status"
   | "low_body_battery"
+  | "low_recovery_score"
   | "low_energy"
   | "high_soreness";
 
@@ -26,6 +27,12 @@ export interface RecoveryObservation {
   avgSpo2?: number;
   avgRespirationRate?: number;
   skinTempDeviationCelsius?: number;
+  /** Whoop 0-100 recovery score. */
+  recoveryScorePercent?: number;
+  /** Whoop 0-100 sleep performance. */
+  sleepPerformancePercent?: number;
+  /** Whoop 0-21 day strain. */
+  dayStrain?: number;
 }
 
 export interface RecoveryCheckInSignal {
@@ -55,6 +62,9 @@ export interface RecoveryMetrics {
   avgSpo2?: number;
   avgRespirationRate?: number;
   skinTempDeviationCelsius?: number;
+  recoveryScorePercent?: number;
+  sleepPerformancePercent?: number;
+  dayStrain?: number;
   energy?: number;
   soreness?: number;
   stress?: number;

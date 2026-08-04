@@ -12,7 +12,16 @@ const RECOVERY_FRESHNESS_MS = 36 * 60 * 60 * 1000;
 const FUTURE_TIMESTAMP_TOLERANCE_MS = 5 * 60 * 1000;
 const SHORT_SLEEP_SECONDS = 6 * 60 * 60;
 const LOW_BODY_BATTERY = 30;
+/** Whoop red zone: recovery at or below this is a caution signal. */
+const LOW_RECOVERY_SCORE = 33;
 const MAX_HISTORY_ROWS = 7;
+
+/** Equal-freshness tie-break; explicit preference is handled before this. */
+const SOURCE_TIE_BREAK_ORDER: Record<RecoveryProviderSource, number> = {
+  garmin: 0,
+  whoop: 1,
+  fitbit: 2,
+};
 
 export interface DeriveRecoveryStateOptions {
   now: number;
@@ -45,7 +54,7 @@ function isFreshCheckIn(
 function compareObservations(left: RecoveryObservation, right: RecoveryObservation): number {
   return (
     right.ingestedAt - left.ingestedAt ||
-    (left.source === right.source ? 0 : left.source === "garmin" ? -1 : 1) ||
+    SOURCE_TIE_BREAK_ORDER[left.source] - SOURCE_TIE_BREAK_ORDER[right.source] ||
     right.calendarDate.localeCompare(left.calendarDate)
   );
 }
@@ -106,6 +115,13 @@ function metricsFromObservation(observation: RecoveryObservation | null): Recove
     ...(observation.skinTempDeviationCelsius !== undefined
       ? { skinTempDeviationCelsius: observation.skinTempDeviationCelsius }
       : {}),
+    ...(observation.recoveryScorePercent !== undefined
+      ? { recoveryScorePercent: observation.recoveryScorePercent }
+      : {}),
+    ...(observation.sleepPerformancePercent !== undefined
+      ? { sleepPerformancePercent: observation.sleepPerformancePercent }
+      : {}),
+    ...(observation.dayStrain !== undefined ? { dayStrain: observation.dayStrain } : {}),
   };
 }
 
@@ -130,6 +146,13 @@ function cautionReasons(
     observation.bodyBatteryHighestValue < LOW_BODY_BATTERY
   ) {
     reasons.push("low_body_battery");
+  }
+  if (
+    observation?.source === "whoop" &&
+    observation.recoveryScorePercent !== undefined &&
+    observation.recoveryScorePercent <= LOW_RECOVERY_SCORE
+  ) {
+    reasons.push("low_recovery_score");
   }
   if (checkIn && checkIn.energy <= 2) reasons.push("low_energy");
   if (checkIn && checkIn.soreness >= 4) reasons.push("high_soreness");

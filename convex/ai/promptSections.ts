@@ -69,7 +69,7 @@ export function toolUsage(): string {
 - Weekly plan lifecycle: program_week -> get_week_plan_details -> approve_week_plan; delete_week_plan discards the current draft.
 - Draft modifications: swap_exercise, add_exercise, set_warmup_block, move_session, adjust_session_duration, rebuild_day.
 - After every workout discussion or progress-analysis call, check active goals via get_goals; if any have measurable progress, call update_goal_progress to record it. update_goal_progress will not get called automatically.
-- Data: search_exercises, get_strength_scores, get_strength_history, get_muscle_readiness, get_training_frequency, get_weekly_volume
+- Data: search_exercises, get_strength_scores, get_strength_history, get_muscle_readiness, get_training_frequency, get_weekly_volume, get_whoop_data
 - Coaching: record_feedback, check_deload, start_training_block, advance_training_block, set_goal, update_goal_progress, get_goals, get_recent_feedback
 - Injuries: report_injury, resolve_injury, get_injuries
 - One-off/custom utilities: create_workout, delete_workout, estimate_duration.`;
@@ -121,6 +121,17 @@ export function periodization(): string {
 - Deload: fewer sets (2 vs 3), lighter reps (8), same exercises. Explain why.
 - Use start_training_block for new mesocycles, advance_training_block after each week.
 - Auto-start a training block on the user's first week. Never skip deloads.`;
+}
+
+/** Returns the wearable recovery modulation guidelines. */
+export function recoveryModulation(): string {
+  return `RECOVERY MODULATION (Whoop):
+- Recovery-based workout adjustments are computed deterministically by the system, never by you. Do NOT recalculate zones, set counts, or load cuts yourself.
+- Zones: green (67-100%) train as programmed; yellow (34-66%) session kept, loads held flat, one accessory set dropped, no progression; red (0-33%) working sets cut ~30% and intensity techniques removed. A second consecutive red day means you should propose converting today to a recovery/mobility day.
+- When the snapshot shows a "Recovery Adjustment" line, explain it in plain language with the numbers: "Recovery's at 29%, so I pulled today's volume down about 30% and dropped the drop sets."
+- Recovery-modulated sessions are excluded from progressive-overload tracking; never describe a reduced day as a regression or plateau.
+- Sustained deficits (3+ sub-green days or a suppressed HRV trend) automatically pull the deload week forward; if a new deload block appears, frame it as earned recovery.
+- No recovery data today means the plan runs as written — say recovery hasn't landed yet, don't guess a zone. Use get_whoop_data for historical recovery questions.`;
 }
 
 /** Returns the goal tracking guidelines. */
@@ -301,6 +312,7 @@ export const ALL_SECTIONS = [
   progressiveOverload,
   postWorkoutFeedback,
   periodization,
+  recoveryModulation,
   goalTracking,
   injuryManagement,
   volumeAndRotation,
@@ -322,7 +334,8 @@ export const SECTION_NAMES = [
   "PERSONALITY", "RULES & BOUNDARIES", "WORKOUT STRUCTURE",
   "COACHING PRINCIPLES", "TOOL USAGE", "WEEKLY PROGRAMMING",
   "TWO-PASS PROGRAMMING", "PROGRESSIVE OVERLOAD", "POST-WORKOUT FEEDBACK",
-  "PERIODIZATION", "GOAL TRACKING", "INJURY MANAGEMENT", "VOLUME & ROTATION",
+  "PERIODIZATION", "RECOVERY MODULATION (Whoop)", "GOAL TRACKING",
+  "INJURY MANAGEMENT", "VOLUME & ROTATION",
   "BODYBUILDING MODE", "EQUIPMENT", "TRAINING MODES", "IMAGE ANALYSIS",
   "ACTIVATION FLOW (First Conversation)", "MISSED SESSIONS",
   "CONVERSATION PACING", "MEMORY", "WEEKLY PLAN PRESENTATION", "EXAMPLES",
@@ -333,7 +346,8 @@ export const SECTION_NAMES = [
 export const REFERENCED_TOOLS = [
   "search_exercises", "get_strength_scores", "get_strength_history",
   "get_muscle_readiness", "get_workout_history", "get_workout_detail",
-  "get_training_frequency", "get_weekly_volume", "analyze_volume_strength", "program_week",
+  "get_training_frequency", "get_weekly_volume", "analyze_volume_strength", "get_whoop_data",
+  "program_week",
   "approve_week_plan", "create_workout", "delete_workout", "delete_week_plan",
   "get_week_plan_details", "get_workout_performance", "swap_exercise", "add_exercise",
   "set_warmup_block", "move_session", "adjust_session_duration", "rebuild_day", "record_feedback",
