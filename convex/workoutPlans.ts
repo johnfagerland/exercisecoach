@@ -88,6 +88,30 @@ export const getByUserIdAndTonalWorkoutId = internalQuery({
   },
 });
 
+const MODULATED_LOOKUP_LIMIT = 100;
+
+/**
+ * Which of these Tonal workout ids belong to recovery-modulated plans.
+ * Progressive-overload tracking treats those sessions as neutral: a reduced
+ * day must never read as regression against programmed loads.
+ */
+export const getRecoveryModulatedTonalWorkoutIds = internalQuery({
+  args: { userId: v.id("users"), tonalWorkoutIds: v.array(v.string()) },
+  handler: async (ctx, { userId, tonalWorkoutIds }): Promise<string[]> => {
+    const modulated: string[] = [];
+    for (const tonalWorkoutId of tonalWorkoutIds.slice(0, MODULATED_LOOKUP_LIMIT)) {
+      const plan = await ctx.db
+        .query("workoutPlans")
+        .withIndex("by_tonalWorkoutId", (q) => q.eq("tonalWorkoutId", tonalWorkoutId))
+        .unique();
+      if (plan && plan.userId === userId && plan.recoveryModulated !== undefined) {
+        modulated.push(tonalWorkoutId);
+      }
+    }
+    return modulated;
+  },
+});
+
 /** Recent movement IDs from pushed/completed plans (for exercise selection no-repeat). */
 export const getRecentMovementIds = internalQuery({
   args: { userId: v.id("users") },

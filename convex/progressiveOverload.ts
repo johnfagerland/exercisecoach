@@ -178,9 +178,29 @@ export const getPerMovementHistory = internalAction({
       movements.filter((m) => m.onMachineInfo?.accessory === "StraightBar").map((m) => m.id),
     );
 
+    // Recovery-modulated sessions are neutral: excluded from history so a
+    // deliberately reduced day never reads as a plateau or regression.
+    const tonalWorkoutIds = [
+      ...new Set(
+        activities.flatMap((activity) =>
+          activity.workoutPreview?.workoutId ? [activity.workoutPreview.workoutId] : [],
+        ),
+      ),
+    ];
+    const modulatedWorkoutIds = new Set<string>(
+      tonalWorkoutIds.length > 0
+        ? await ctx.runQuery(internal.workoutPlans.getRecoveryModulatedTonalWorkoutIds, {
+            userId,
+            tonalWorkoutIds,
+          })
+        : [],
+    );
+
     const perMovement = new Map<string, MovementSessionSnapshot[]>();
 
     for (const activity of activities) {
+      const workoutId = activity.workoutPreview?.workoutId;
+      if (workoutId !== undefined && modulatedWorkoutIds.has(workoutId)) continue;
       const activityId = activity.activityId;
       let detail: WorkoutActivityDetail | null;
       try {

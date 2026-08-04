@@ -138,6 +138,44 @@ export const startBlock = internalMutation({
   },
 });
 
+/**
+ * Pull the deload block forward in response to a sustained recovery deficit
+ * (consecutive low Whoop recovery days or a suppressed HRV trend). Only an
+ * active building block is interrupted; deload and testing blocks are left
+ * alone, so repeated signals are naturally idempotent.
+ */
+export const pullDeloadForward = internalMutation({
+  args: { userId: v.id("users"), startDate: v.string() },
+  handler: async (
+    ctx,
+    args,
+  ): Promise<{ pulled: boolean; reason: "started" | "no_building_block" }> => {
+    const blocks = await ctx.db
+      .query("trainingBlocks")
+      .withIndex("by_userId_status", (q) => q.eq("userId", args.userId).eq("status", "active"))
+      .collect();
+    const active = blocks[0] ?? null;
+    if (!active || active.blockType !== "building") {
+      return { pulled: false, reason: "no_building_block" };
+    }
+    await ctx.db.patch(active._id, {
+      status: "completed",
+      endDate: args.startDate,
+    });
+    await ctx.db.insert("trainingBlocks", {
+      userId: args.userId,
+      label: "Deload Week (recovery-triggered)",
+      blockType: "deload",
+      weekNumber: 1,
+      totalWeeks: DEFAULT_DELOAD_WEEKS,
+      startDate: args.startDate,
+      status: "active",
+      createdAt: Date.now(),
+    });
+    return { pulled: true, reason: "started" };
+  },
+});
+
 /** Advance the current block to the next week. Auto-transitions building → deload. */
 export const advanceWeek = internalMutation({
   args: { userId: v.id("users") },
