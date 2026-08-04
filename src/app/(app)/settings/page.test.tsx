@@ -4,6 +4,7 @@ import SettingsPage from "./page";
 
 const mockGetFitbitFeatureStatus = vi.fn();
 const mockGetStravaFeatureStatus = vi.fn();
+const mockGetWhoopFeatureStatus = vi.fn();
 const mockOtherAction = vi.fn();
 const mockSignOut = vi.fn();
 let mockSearchParams = new URLSearchParams();
@@ -15,6 +16,9 @@ vi.mock("convex/react", () => ({
     }
     if (ref === "strava:status:getStravaFeatureStatus") {
       return mockGetStravaFeatureStatus;
+    }
+    if (ref === "whoop:connections:getWhoopFeatureStatus") {
+      return mockGetWhoopFeatureStatus;
     }
     return mockOtherAction;
   },
@@ -73,6 +77,11 @@ vi.mock("../../../../convex/_generated/api", () => ({
         getStravaFeatureStatus: "strava:status:getStravaFeatureStatus",
       },
     },
+    whoop: {
+      connections: {
+        getWhoopFeatureStatus: "whoop:connections:getWhoopFeatureStatus",
+      },
+    },
   },
 }));
 
@@ -110,6 +119,20 @@ vi.mock("@/features/settings/StravaConnectionCard", () => ({
     </div>
   ),
 }));
+vi.mock("@/features/settings/WhoopConnectionCard", () => ({
+  WhoopConnectionCard: ({
+    configured,
+    callbackNotice,
+  }: {
+    configured: boolean;
+    callbackNotice?: { message: string };
+  }) => (
+    <div data-testid="whoop-connection-card" data-configured={String(configured)}>
+      <button type="button">Disconnect Whoop</button>
+      {callbackNotice?.message}
+    </div>
+  ),
+}));
 vi.mock("@/features/byok/ProviderSection", () => ({ ProviderSection: () => null }));
 
 describe("SettingsPage Fitbit availability", () => {
@@ -117,6 +140,8 @@ describe("SettingsPage Fitbit availability", () => {
     mockGetFitbitFeatureStatus.mockReset();
     mockGetStravaFeatureStatus.mockReset();
     mockGetStravaFeatureStatus.mockResolvedValue({ configured: false, hasConnection: false });
+    mockGetWhoopFeatureStatus.mockReset();
+    mockGetWhoopFeatureStatus.mockResolvedValue({ enabled: false, hasConnection: false });
     mockOtherAction.mockReset();
     mockSignOut.mockReset();
     mockSearchParams = new URLSearchParams();
@@ -187,6 +212,51 @@ describe("SettingsPage Fitbit availability", () => {
     expect(mockGetStravaFeatureStatus).toHaveBeenCalledTimes(2);
     expect(screen.getByRole("heading", { name: "Strava Connection" })).toBeVisible();
     expect(screen.getByRole("button", { name: "Disconnect Strava" })).toBeEnabled();
+  });
+
+  it("keeps an existing Whoop connection manageable when availability fails", async () => {
+    mockGetFitbitFeatureStatus.mockResolvedValue({ enabled: false, hasConnection: false });
+    mockGetWhoopFeatureStatus
+      .mockRejectedValueOnce(new Error("Temporary failure"))
+      .mockResolvedValueOnce({ enabled: false, hasConnection: true });
+
+    render(<SettingsPage />);
+
+    expect(
+      await screen.findByText(
+        "Could not check Whoop availability. Existing connections are not affected.",
+      ),
+    ).toBeVisible();
+    expect(screen.getByRole("heading", { name: "Whoop Connection" })).toBeVisible();
+    expect(screen.getByRole("button", { name: "Disconnect Whoop" })).toBeEnabled();
+    expect(screen.getByTestId("whoop-connection-card")).toHaveAttribute("data-configured", "false");
+
+    fireEvent.click(screen.getByRole("button", { name: "Retry" }));
+
+    await waitFor(() => {
+      expect(
+        screen.queryByText(
+          "Could not check Whoop availability. Existing connections are not affected.",
+        ),
+      ).not.toBeInTheDocument();
+    });
+    expect(mockGetWhoopFeatureStatus).toHaveBeenCalledTimes(2);
+    expect(screen.getByRole("heading", { name: "Whoop Connection" })).toBeVisible();
+    expect(screen.getByRole("button", { name: "Disconnect Whoop" })).toBeEnabled();
+  });
+
+  it("shows a safe Whoop callback notice without reflecting arbitrary reasons", async () => {
+    mockGetFitbitFeatureStatus.mockResolvedValue({ enabled: false, hasConnection: false });
+    mockGetWhoopFeatureStatus.mockResolvedValue({ enabled: true, hasConnection: false });
+    mockSearchParams = new URLSearchParams({
+      whoop: "error",
+      reason: "provider secret detail",
+    });
+
+    render(<SettingsPage />);
+
+    expect(await screen.findByText("Whoop connection failed. Please try again.")).toBeVisible();
+    expect(screen.queryByText(/provider secret detail/i)).not.toBeInTheDocument();
   });
 
   it("shows a safe Strava callback notice without reflecting arbitrary reasons", async () => {

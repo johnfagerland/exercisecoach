@@ -48,10 +48,11 @@ describe("HomePage", () => {
 
     expect(screen.getByText("Fitbit")).toBeInTheDocument();
     expect(screen.getByText("Garmin")).toBeInTheDocument();
-    expect(screen.getAllByText("Provider review")).toHaveLength(2);
+    expect(screen.getByText("Whoop")).toBeInTheDocument();
+    expect(screen.getAllByText("Provider review")).toHaveLength(3);
     expect(
       screen.getByText(
-        "Optional Fitbit and Garmin features remain subject to their providers' approval and may not be available to every account.",
+        "Optional Fitbit, Garmin, and Whoop features remain subject to their providers' approval and may not be available to every account.",
       ),
     ).toBeInTheDocument();
     expect(screen.getByRole("link", { name: "Read the full data policy" })).toHaveAttribute(

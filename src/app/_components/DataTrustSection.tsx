@@ -16,6 +16,11 @@ const DATA_SOURCES = [
     use: "Optional activity and recovery context, plus approved workout delivery.",
     status: "Provider review",
   },
+  {
+    name: "Whoop",
+    use: "Optional read-only recovery, sleep, and strain context from your Whoop membership.",
+    status: "Provider review",
+  },
 ] as const;
 
 export function DataTrustSection() {
@@ -55,8 +60,8 @@ export function DataTrustSection() {
             </div>
           ))}
           <p className="px-6 py-4 text-xs leading-5 text-muted-foreground">
-            Optional Fitbit and Garmin features remain subject to their providers&apos; approval and
-            may not be available to every account.
+            Optional Fitbit, Garmin, and Whoop features remain subject to their providers&apos;
+            approval and may not be available to every account.
           </p>
         </div>
       </div>
