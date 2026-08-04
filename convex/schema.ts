@@ -75,7 +75,9 @@ export default defineSchema({
       }),
     ),
     /** Authoritative provider for overlapping sleep/recovery data. Omitted = freshest source. */
-    preferredRecoverySource: v.optional(v.union(v.literal("garmin"), v.literal("fitbit"))),
+    preferredRecoverySource: v.optional(
+      v.union(v.literal("garmin"), v.literal("fitbit"), v.literal("whoop")),
+    ),
     /** Timestamp before which all check-ins are considered read (single-write "mark all read"). */
     checkInsReadAllBeforeAt: v.optional(v.number()),
     /** Which Tonal accessories the user owns (for exercise filtering). */
@@ -365,6 +367,20 @@ export default defineSchema({
     ),
     pushErrorReason: v.optional(v.string()),
     estimatedDuration: v.optional(v.number()),
+    /**
+     * Set when the draft was deterministically adjusted for low recovery.
+     * Progressive-overload tracking treats tagged sessions as neutral so a
+     * reduced day is never read as regression.
+     */
+    recoveryModulated: v.optional(
+      v.object({
+        calendarDate: v.string(),
+        zone: v.union(v.literal("yellow"), v.literal("red")),
+        recoveryScore: v.number(),
+        setScale: v.number(),
+        appliedAt: v.number(),
+      }),
+    ),
     createdAt: v.number(),
     pushedAt: v.optional(v.number()),
   })
@@ -1115,6 +1131,173 @@ export default defineSchema({
     .index("by_eventKey", ["eventKey"])
     .index("by_userId", ["userId"])
     .index("by_status_and_updatedAt", ["status", "updatedAt"]),
+
+  /** Whoop OAuth credentials for one Whoop member. Disconnected docs cannot retain credentials. */
+  whoopConnections: defineTable(
+    v.union(
+      v.object({
+        userId: v.id("users"),
+        whoopUserId: v.string(),
+        generation: v.string(),
+        status: v.literal("active"),
+        accessTokenEncrypted: v.string(),
+        refreshTokenEncrypted: v.string(),
+        tokenExpiresAt: v.number(),
+        scopes: v.array(v.string()),
+        connectedAt: v.number(),
+        refreshDueAt: v.number(),
+        lastSyncAttemptAt: v.optional(v.number()),
+        lastSyncedAt: v.optional(v.number()),
+        lastSyncError: v.optional(v.string()),
+      }),
+      v.object({
+        userId: v.id("users"),
+        whoopUserId: v.string(),
+        generation: v.string(),
+        status: v.literal("disconnected"),
+        scopes: v.array(v.string()),
+        connectedAt: v.number(),
+        disconnectedAt: v.number(),
+        disconnectReason: v.union(
+          v.literal("user_disconnected"),
+          v.literal("permission_revoked"),
+          v.literal("token_invalid"),
+        ),
+      }),
+    ),
+  )
+    .index("by_userId", ["userId"])
+    .index("by_whoopUserId_and_status", ["whoopUserId", "status"])
+    .index("by_status_and_refreshDueAt", ["status", "refreshDueAt"]),
+
+  /** Hashed, single-use Whoop OAuth state bound to the initiating Roni user. */
+  whoopOauthStates: defineTable({
+    userId: v.id("users"),
+    stateHash: v.string(),
+    createdAt: v.number(),
+    expiresAt: v.number(),
+  })
+    .index("by_stateHash", ["stateHash"])
+    .index("by_expiresAt", ["expiresAt"])
+    .index("by_userId", ["userId"]),
+
+  /** Encrypted Whoop authorization code behind a hashed, single-use browser ticket. */
+  whoopOauthCallbackTickets: defineTable({
+    userId: v.id("users"),
+    ticketHash: v.string(),
+    authorizationCodeEncrypted: v.string(),
+    createdAt: v.number(),
+    expiresAt: v.number(),
+  })
+    .index("by_ticketHash", ["ticketHash"])
+    .index("by_expiresAt", ["expiresAt"])
+    .index("by_userId", ["userId"]),
+
+  /**
+   * Whoop v2 recovery records, one per scored sleep. Raw JSON is retained so
+   * new metrics can be backfilled without re-fetching from Whoop.
+   */
+  whoopRecovery: defineTable({
+    userId: v.id("users"),
+    generation: v.string(),
+    /** Local calendar date the recovery applies to (derived from the cycle timezone offset). */
+    calendarDate: v.string(),
+    /** UUID of the sleep this recovery scores; v2 webhooks identify recoveries by it. */
+    sleepId: v.string(),
+    cycleId: v.number(),
+    /** Signed UTC offset like "-05:00" from the owning cycle, for local-date math. */
+    timezoneOffset: v.optional(v.string()),
+    scoreState: v.string(),
+    userCalibrating: v.optional(v.boolean()),
+    recoveryScore: v.optional(v.number()),
+    hrvRmssdMilli: v.optional(v.number()),
+    restingHeartRate: v.optional(v.number()),
+    spo2Percentage: v.optional(v.number()),
+    skinTempCelsius: v.optional(v.number()),
+    rawJson: v.string(),
+    lastIngestedAt: v.number(),
+  })
+    .index("by_userId", ["userId"])
+    .index("by_userId_and_sleepId", ["userId", "sleepId"])
+    .index("by_userId_and_generation_and_calendarDate", ["userId", "generation", "calendarDate"]),
+
+  /** Whoop v2 sleep activities keyed by UUID. */
+  whoopSleep: defineTable({
+    userId: v.id("users"),
+    generation: v.string(),
+    /** Local calendar date of the wake-up (sleep end in the record's timezone). */
+    calendarDate: v.string(),
+    sleepId: v.string(),
+    start: v.string(),
+    end: v.string(),
+    timezoneOffset: v.optional(v.string()),
+    nap: v.boolean(),
+    scoreState: v.string(),
+    sleepPerformancePercentage: v.optional(v.number()),
+    sleepEfficiencyPercentage: v.optional(v.number()),
+    sleepConsistencyPercentage: v.optional(v.number()),
+    respiratoryRate: v.optional(v.number()),
+    totalInBedTimeMilli: v.optional(v.number()),
+    totalAwakeTimeMilli: v.optional(v.number()),
+    totalLightSleepTimeMilli: v.optional(v.number()),
+    totalSlowWaveSleepTimeMilli: v.optional(v.number()),
+    totalRemSleepTimeMilli: v.optional(v.number()),
+    sleepCycleCount: v.optional(v.number()),
+    disturbanceCount: v.optional(v.number()),
+    rawJson: v.string(),
+    lastIngestedAt: v.number(),
+  })
+    .index("by_userId", ["userId"])
+    .index("by_userId_and_sleepId", ["userId", "sleepId"])
+    .index("by_userId_and_generation_and_calendarDate", ["userId", "generation", "calendarDate"]),
+
+  /** Whoop physiological cycles (day strain) keyed by Whoop's numeric cycle id. */
+  whoopCycles: defineTable({
+    userId: v.id("users"),
+    generation: v.string(),
+    /** Local calendar date the cycle started (in the record's timezone). */
+    calendarDate: v.string(),
+    cycleId: v.number(),
+    start: v.string(),
+    /** Absent while the cycle is still in progress. */
+    end: v.optional(v.string()),
+    timezoneOffset: v.optional(v.string()),
+    scoreState: v.string(),
+    strain: v.optional(v.number()),
+    kilojoule: v.optional(v.number()),
+    averageHeartRate: v.optional(v.number()),
+    maxHeartRate: v.optional(v.number()),
+    rawJson: v.string(),
+    lastIngestedAt: v.number(),
+  })
+    .index("by_userId", ["userId"])
+    .index("by_userId_and_cycleId", ["userId", "cycleId"])
+    .index("by_userId_and_generation_and_calendarDate", ["userId", "generation", "calendarDate"]),
+
+  /** Whoop webhook deliveries retained for bounded retry and observability. */
+  whoopWebhookEvents: defineTable({
+    userId: v.id("users"),
+    connectionGeneration: v.string(),
+    eventType: v.string(),
+    /** Sleep/workout UUID or cycle id as delivered; recovery events carry the sleep UUID. */
+    resourceId: v.string(),
+    whoopUserId: v.string(),
+    traceId: v.optional(v.string()),
+    status: v.union(
+      v.literal("received"),
+      v.literal("processing"),
+      v.literal("processed"),
+      v.literal("ignored"),
+      v.literal("error"),
+    ),
+    attempts: v.number(),
+    receivedAt: v.number(),
+    updatedAt: v.number(),
+    expiresAt: v.number(),
+    errorReason: v.optional(v.string()),
+  })
+    .index("by_userId", ["userId"])
+    .index("by_expiresAt", ["expiresAt"]),
 
   /** Pre-generated workout library entries for SEO and inspiration. */
   libraryWorkouts: defineTable({

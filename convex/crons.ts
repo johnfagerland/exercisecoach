@@ -84,6 +84,24 @@ if (cronsEnabled()) {
     internal.strava.oauthFlow.sweepExpiredOauthArtifacts,
     {},
   );
+
+  // 30m matches Whoop's hourly access-token expiry; each sync refreshes the
+  // token and backfills the trailing week that webhooks may have missed.
+  crons.interval("sync-whoop-data", { minutes: 30 }, internal.whoop.sync.scheduleDueSyncs, {});
+
+  crons.interval(
+    "sweep-whoop-oauth-artifacts",
+    { hours: 1 },
+    internal.whoop.sync.sweepExpiredOauthArtifacts,
+    {},
+  );
+
+  crons.interval(
+    "sweep-whoop-webhook-events",
+    { hours: 6 },
+    internal.whoop.webhookEvents.sweepExpired,
+    {},
+  );
 }
 
 export default crons;

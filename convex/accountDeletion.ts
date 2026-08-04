@@ -129,6 +129,13 @@ async function takeBatchForDeletion(
     case "stravaOauthStates":
     case "stravaOauthCallbackTickets":
     case "stravaWebhookEvents":
+    case "whoopConnections":
+    case "whoopOauthStates":
+    case "whoopOauthCallbackTickets":
+    case "whoopWebhookEvents":
+    case "whoopRecovery":
+    case "whoopSleep":
+    case "whoopCycles":
       return (
         await ctx.db
           .query(table)

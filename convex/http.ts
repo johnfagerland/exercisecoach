@@ -12,6 +12,7 @@ import {
   verifyGarminWebhookSignature,
 } from "./garmin/webhookSignature";
 import { resolveAppOrigin, resolveFitbitAppOrigin, resolveStravaAppOrigin } from "./httpOrigin";
+import { addWhoopRoutes } from "./whoop/routes";
 
 const http = httpRouter();
 auth.addHttpRoutes(http);
@@ -178,6 +179,8 @@ http.route({
     return Response.json({});
   }),
 });
+
+addWhoopRoutes(http, readBoundedBody);
 
 /**
  * Garmin redirects the user's browser here at the end of the OAuth 1.0a

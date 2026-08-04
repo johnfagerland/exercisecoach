@@ -84,6 +84,13 @@ export const USER_DATA_TABLES = [
   { table: "stravaOauthStates", delete: "byUserIdBatch", jsonExportKey: null },
   { table: "stravaOauthCallbackTickets", delete: "byUserIdBatch", jsonExportKey: null },
   { table: "stravaWebhookEvents", delete: "byUserIdBatch", jsonExportKey: null },
+  { table: "whoopConnections", delete: "byUserIdBatch", jsonExportKey: null },
+  { table: "whoopOauthStates", delete: "byUserIdBatch", jsonExportKey: null },
+  { table: "whoopOauthCallbackTickets", delete: "byUserIdBatch", jsonExportKey: null },
+  { table: "whoopWebhookEvents", delete: "byUserIdBatch", jsonExportKey: null },
+  { table: "whoopRecovery", delete: "byUserIdBatch", jsonExportKey: "whoopRecovery" },
+  { table: "whoopSleep", delete: "byUserIdBatch", jsonExportKey: "whoopSleep" },
+  { table: "whoopCycles", delete: "byUserIdBatch", jsonExportKey: "whoopCycles" },
 ] as const;
 
 type UserDataEntry = (typeof USER_DATA_TABLES)[number];
